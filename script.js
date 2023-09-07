@@ -92,7 +92,7 @@ function initializeVariables() {
         Closed_Fist: "N",
         Open_Palm: "W",
         Pointing_Up: "S",
-        Thumb_Up: "E",
+        Thumb_Up: "FCW",
         Victory: "STOP",
     };
     let lastDirection;
@@ -168,46 +168,48 @@ function sendMediaServerInfo() {
 }
 
 async function openWebSocket() {
+    const path = `pang/ws/sub?channel=instant&name=${networkConfig.channel_name}&track=video&mode=bundle`;
+    const serverURL = `${window.location.protocol.replace(/:$/, "") === "https" ? "wss" : "ws"
+        }://${networkConfig.host}:${networkConfig.port}/${path}`;
+
+    websocket = new WebSocket(serverURL);
+    websocket.binaryType = "arraybuffer";
+    websocket.onopen = async () => {
+
+        displayMessage(`Connected to ${serverURL}`);
+
+        const videoDecoder = new VideoDecoder({
+            output: handleChunk,
+            error: (error) => console.error(error),
+        });
+        const videoDecoderConfig = {
+            codec: "avc1.42E03C",
+        };
+        if (!(await VideoDecoder.isConfigSupported(videoDecoderConfig))) {
+            throw new Error("VideoDecoder configuration is not supported.");
+        }
+        videoDecoder.configure(videoDecoderConfig);
+        websocket.onmessage = (e) => {
+            try {
+                if (videoDecoder.state === "configured") {
+                    const encodedChunk = new EncodedVideoChunk({
+                        type: "key",
+                        data: e.data,
+                        timestamp: e.timeStamp,
+                        duration: 0,
+                    });
+
+                    videoDecoder.decode(encodedChunk);
+                }
+            } catch (error) {
+                console.error(error);
+            }
+        };
+
+    }
+    disconnectFromBluetoothDevice(device);
+    keepWebSocketAlive(websocket);
     enableCam();
-    // const path = `pang/ws/sub?channel=instant&name=${networkConfig.channel_name}&track=video&mode=bundle`;
-    // const serverURL = `${window.location.protocol.replace(/:$/, "") === "https" ? "wss" : "ws"
-    //     }://${networkConfig.host}:${networkConfig.port}/${path}`;
-
-    // websocket = new WebSocket(serverURL);
-    // websocket.binaryType = "arraybuffer";
-    // websocket.onopen = async () => {
-
-    //     displayMessage(`Connected to ${serverURL}`);
-
-    //     const videoDecoder = new VideoDecoder({
-    //         output: handleChunk,
-    //         error: (error) => console.error(error),
-    //     });
-    //     const videoDecoderConfig = {
-    //         codec: "avc1.42E03C",
-    //     };
-    //     if (!(await VideoDecoder.isConfigSupported(videoDecoderConfig))) {
-    //         throw new Error("VideoDecoder configuration is not supported.");
-    //     }
-    //     videoDecoder.configure(videoDecoderConfig);
-    //     websocket.onmessage = (e) => {
-    //         try {
-    //             if (videoDecoder.state === "configured") {
-    //                 const encodedChunk = new EncodedVideoChunk({
-    //                     type: "key",
-    //                     data: e.data,
-    //                     timestamp: e.timeStamp,
-    //                     duration: 0,
-    //                 });
-
-    //                 videoDecoder.decode(encodedChunk);
-    //             }
-    //         } catch (error) {
-    //             console.error(error);
-    //         }
-    //     };
-    //     keepWebSocketAlive(websocket);
-    // }
 }
 function handleChunk(frame) {
     const canvasElement = document.getElementById("canvasElement");
@@ -225,7 +227,7 @@ function drawVideoFrameOnCanvas(canvas, frame) {
 }
 function stop() {
     websocket.close();
-    disconnectFromBluetoothDevice(device);
+    // disconnectFromBluetoothDevice(device);
 }
 const createGestureRecognizer = async () => {
     const vision = await FilesetResolver.forVisionTasks(
@@ -257,26 +259,26 @@ const createGestureRecognizer = async () => {
 //                 gestures,
 //             } = detectedGestures;
 
-//             if (gestures[0]) {
-//                 const gesture = gestures[0][0].categoryName;
+// if (gestures[0]) {
+//     const gesture = gestures[0][0].categoryName;
 
-//                 if (Object.keys(controlCommandMap).includes(gesture)) {
-//                     const direction = controlCommandMap[gesture];
-//                     if (direction !== lastDirection) {
-//                         lastDirection = direction;
+//     if (Object.keys(controlCommandMap).includes(gesture)) {
+//         const direction = controlCommandMap[gesture];
+//         if (direction !== lastDirection) {
+//             lastDirection = direction;
 
-//                         const controlCommand = {
-//                             type: "control",
-//                             direction,
-//                         };
-//                         // if (websocket && websocket.readyState === WebSocket.OPEN) {
-//                         if (1) {
-//                             websocket.send(JSON.stringify(controlCommand));
-//                             displayMessage(`Send '${direction}' command`);
-//                         }
-//                     }
-//                 }
+//             const controlCommand = {
+//                 type: "control",
+//                 direction,
+//             };
+//             // if (websocket && websocket.readyState === WebSocket.OPEN) {
+//             if (1) {
+//                 websocket.send(JSON.stringify(controlCommand));
+//                 displayMessage(`Send '${direction}' command`);
 //             }
+//         }
+//     }
+// }
 //         });
 //     }
 // }
@@ -379,6 +381,17 @@ function displayMessage(messageContent) {
     messageView.innerHTML += `${messageContent}\n`;
     messageView.scrollTop = messageView.scrollHeight;
 }
+function displayDirection(messageContent) {
+    const messageView = document.getElementById("directionView");
+
+    if (typeof messageContent == "object") {
+        messageContent = JSON.stringify(messageContent);
+    }
+    messageView.innerHTML += `${messageContent}\n`;
+    messageView.scrollTop = messageView.scrollHeight;
+}
+
+
 
 function keepWebSocketAlive(webSocket, interval) {
     const pingInterval = interval ?? 10000;
@@ -479,39 +492,31 @@ async function predictWebcam() {
         lastVideoTime = video.currentTime;
         resultsDetect = gestureRecognizer.recognizeForVideo(video, nowInMs);
     }
-    // canvasCtx.save();
-    // canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-    // const drawingUtils = new DrawingUtils(canvasCtx);
-    // canvasElement.style.height = videoHeight;
-    // canvasElement.style.width = videoWidth;
-    // video.style.width = videoWidth;
-    // video.style.height = videoHeight;
-    // if (results.landmarks) {
-    //   for (const landmarks of results.landmarks) {
-    //     drawingUtils.drawConnectors(
-    //       landmarks,
-    //       GestureRecognizer.HAND_CONNECTIONS,
-    //       {
-    //         color: "#00FF00",
-    //         lineWidth: 5
-    //       }
-    //     );
-    //     drawingUtils.drawLandmarks(landmarks, {
-    //       color: "#FF0000",
-    //       lineWidth: 2
-    //     });
-    //   }
-    // }
-    // canvasCtx.restore();
     if (resultsDetect.gestures.length > 0) {
-        // gestureOutput.style.display = "block";
-        // gestureOutput.style.width = videoWidth;
         const categoryName = resultsDetect.gestures[0][0].categoryName;
-        const categoryScore = parseFloat(
-            resultsDetect.gestures[0][0].score * 100
-        ).toFixed(2);
-        const handedness = resultsDetect.handednesses[0][0].displayName;
-        displayMessage(`GestureRecognizer: ${categoryName}\n Confidence: ${categoryScore} %\n Handedness: ${handedness}`);
+        displayMessage(`Send '${categoryName}' command`);
+        if (Object.keys(controlCommandMap).includes(categoryName)) {
+            const direction = controlCommandMap[categoryName];
+            if (direction !== lastDirection) {
+                lastDirection = direction;
+                const controlCommand = {
+                    type: "control",
+                    direction,
+                };
+                if (websocket && websocket.readyState === WebSocket.OPEN) {
+                    websocket.send(JSON.stringify(controlCommand));
+                    displayMessage(`Send '${direction}' command`);
+                    displayDirection(`Send '${direction}' command`);
+                    
+                }
+            }
+        }
+        // const categoryName = resultsDetect.gestures[0][0].categoryName;
+        // const categoryScore = parseFloat(
+        //     resultsDetect.gestures[0][0].score * 100
+        // ).toFixed(2);
+        // const handedness = resultsDetect.handednesses[0][0].displayName;
+        // displayMessage(`GestureRecognizer: ${categoryName}\n Confidence: ${categoryScore} %\n Handedness: ${handedness}`);
         // gestureOutput.innerText = `GestureRecognizer: ${categoryName}\n Confidence: ${categoryScore} %\n Handedness: ${handedness}`;
     } else {
         // gestureOutput.style.display = "none";
