@@ -152,9 +152,9 @@ h1:hover {
 /* WIFI config */
 /* label {
     /* font-style: bold; */
-} */
+/* }  */
 
-.wifiGrid>input {
+.wifiGrid > input {
     width: 100%;
     margin-bottom: 10px;
     padding: 12px 20px;

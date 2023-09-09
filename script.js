@@ -4,6 +4,12 @@ import {
     DrawingUtils
 } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3";
 
+
+import {
+    initVar,
+    enableCam
+} from './app.js'
+
 const DEFAULT_ROBOT_PROFILE = "RPI_BW_001";
 
 const deviceNamePrefixMap = {
@@ -37,6 +43,14 @@ const UART_TX_CHARACTERISTIC_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
 // /*Webcam function */
 // function hasGetUserMedia();
 // function enableCam(event);
+
+// let controlCommandMap = {
+//     Closed_Fist: "N",
+//     Open_Palm: "W",
+//     Pointing_Up: "S",
+//     Thumb_Up: "E",
+//     Victory: "STOP",
+//   };
 
 const {
     pairButton,
@@ -89,11 +103,11 @@ function initializeVariables() {
     let gestureRecognizer;
     let runningMode = "VIDEO";
     let controlCommandMap = {
-        Closed_Fist: "N",
-        Open_Palm: "W",
-        Pointing_Up: "S",
-        Thumb_Up: "E",
-        Victory: "STOP",
+        1: "N",
+        2: "FCC",
+        3: "S",
+        4: "FCW",
+        19: "STOP",
     };
     let lastDirection;
     let lastVideoTime = -1;
@@ -164,50 +178,75 @@ function sendMediaServerInfo() {
             },
         };
         sendMessageToDeviceOverBluetooth(JSON.stringify(metricData), device);
+        onReadMessagefromDeviceOverBluetooth(device)
+    }
+}
+
+function executeMotion(digits) {
+    // if (Object.keys(controlCommandMap).includes(digits)) {
+    //     const direction = co
+    // }
+    const direction = controlCommandMap[digits]
+    // console.log("Direction ",direction)
+    if (direction !== lastDirection) {
+        lastDirection = direction;
+        console.log("Sending")
+        const controlCommand = {
+            type: "control",
+            direction,
+        };
+        if (websocket && websocket.readyState === WebSocket.OPEN) {
+            websocket.send(JSON.stringify(controlCommand));
+            console.log(`Send '${direction}' command`)
+            displayMessage(`Send '${direction}' command`);
+        }
     }
 }
 
 async function openWebSocket() {
-    enableCam();
-    // const path = `pang/ws/sub?channel=instant&name=${networkConfig.channel_name}&track=video&mode=bundle`;
-    // const serverURL = `${window.location.protocol.replace(/:$/, "") === "https" ? "wss" : "ws"
-    //     }://${networkConfig.host}:${networkConfig.port}/${path}`;
+    // enableCam();
 
-    // websocket = new WebSocket(serverURL);
-    // websocket.binaryType = "arraybuffer";
-    // websocket.onopen = async () => {
+    enableCam(executeMotion)
+    const path = `pang/ws/sub?channel=instant&name=${networkConfig.channel_name}&track=video&mode=bundle`;
+    const serverURL = `${window.location.protocol.replace(/:$/, "") === "https" ? "wss" : "ws"
+        }://${networkConfig.host}:${networkConfig.port}/${path}`;
 
-    //     displayMessage(`Connected to ${serverURL}`);
+    websocket = new WebSocket(serverURL);
+    websocket.binaryType = "arraybuffer";
+    websocket.onopen = async () => {
 
-    //     const videoDecoder = new VideoDecoder({
-    //         output: handleChunk,
-    //         error: (error) => console.error(error),
-    //     });
-    //     const videoDecoderConfig = {
-    //         codec: "avc1.42E03C",
-    //     };
-    //     if (!(await VideoDecoder.isConfigSupported(videoDecoderConfig))) {
-    //         throw new Error("VideoDecoder configuration is not supported.");
-    //     }
-    //     videoDecoder.configure(videoDecoderConfig);
-    //     websocket.onmessage = (e) => {
-    //         try {
-    //             if (videoDecoder.state === "configured") {
-    //                 const encodedChunk = new EncodedVideoChunk({
-    //                     type: "key",
-    //                     data: e.data,
-    //                     timestamp: e.timeStamp,
-    //                     duration: 0,
-    //                 });
+        displayMessage(`Connected to ${serverURL}`);
 
-    //                 videoDecoder.decode(encodedChunk);
-    //             }
-    //         } catch (error) {
-    //             console.error(error);
-    //         }
-    //     };
-    //     keepWebSocketAlive(websocket);
-    // }
+        const videoDecoder = new VideoDecoder({
+            output: handleChunk,
+            error: (error) => console.error(error),
+        });
+        const videoDecoderConfig = {
+            codec: "avc1.42E03C",
+        };
+        if (!(await VideoDecoder.isConfigSupported(videoDecoderConfig))) {
+            throw new Error("VideoDecoder configuration is not supported.");
+        }
+        videoDecoder.configure(videoDecoderConfig);
+        websocket.onmessage = (e) => {
+            try {
+                console.log("WS message")
+                if (videoDecoder.state === "configured") {
+                    const encodedChunk = new EncodedVideoChunk({
+                        type: "key",
+                        data: e.data,
+                        timestamp: e.timeStamp,
+                        duration: 0,
+                    });
+
+                    videoDecoder.decode(encodedChunk);
+                }
+            } catch (error) {
+                console.error(error);
+            }
+        };
+    }
+    keepWebSocketAlive(websocket);
 }
 function handleChunk(frame) {
     const canvasElement = document.getElementById("canvasElement");
@@ -353,6 +392,21 @@ async function sendMessageToDeviceOverBluetooth(message, device) {
     }
 }
 
+
+//read data from bluetooth
+async function onReadMessagefromDeviceOverBluetooth(device) {
+    console.log("Start reading")
+    const server = await device.gatt?.connect();
+    const service = await server?.getPrimaryService(UART_SERVICE_UUID);
+    const txCharacteristic = await service?.getCharacteristic(
+        UART_TX_CHARACTERISTIC_UUID
+    );
+    const Characteristic = await txCharacteristic.startNotifications()
+    Characteristic.addEventListener('characteristicvaluechanged',(e) => {
+        console.log( "Wifi",new TextDecoder("utf-8").decode(e.target.value))
+    })
+}
+
 // async function getVideoStream({
 //     deviceId,
 //     idealWidth,
@@ -428,14 +482,16 @@ function gestureSwitch() {
 }
 
 async function main() {
-    document.addEventListener("DOMContentLoaded", () => {
-        pairButton.addEventListener("click", bluetoothPairing);
-        sendMediaServerInfoButton.addEventListener("click", sendMediaServerInfo);
-        openWebSocketButton.addEventListener("click", openWebSocket);
-        stopButton.addEventListener("click", stop);
-        pairTab.addEventListener("click", pairSwitch);
-        gestureTab.addEventListener("click", gestureSwitch);
-    });
+    initVar(video)
+    // document.addEventListener("DOMContentLoaded", () => {
+    pairButton.addEventListener("click", bluetoothPairing);
+    sendMediaServerInfoButton.addEventListener("click", sendMediaServerInfo);
+    openWebSocketButton.addEventListener("click", openWebSocket);
+    stopButton.addEventListener("click", stop);
+    pairTab.addEventListener("click", pairSwitch);
+    gestureTab.addEventListener("click", gestureSwitch);
+    // });
+
     await createGestureRecognizer();
     if (hasGetUserMedia()) {
         console.log("hasGetUserMedia");
@@ -455,66 +511,69 @@ function hasGetUserMedia() {
     return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 }
 
+
+
+
 // Enable the live webcam view and start detection.
-function enableCam(event) {
-    if (!gestureRecognizer) {
-        alert("Please wait for gestureRecognizer to load");
-        return;
-    }
-    // getUsermedia parameters.
-    const constraints = {
-        video: true
-    };
+// function enableCam(event) {
+//     if (!gestureRecognizer) {
+//         alert("Please wait for gestureRecognizer to load");
+//         return;
+//     }
+//     // getUsermedia parameters.
+//     const constraints = {
+//         video: true
+//     };
 
-    // Activate the webcam stream.
-    navigator.mediaDevices.getUserMedia(constraints).then(function (stream) {
-        video.srcObject = stream;
-        video.addEventListener("loadeddata", predictWebcam);
-    });
-}
+//     // Activate the webcam stream.
+//     navigator.mediaDevices.getUserMedia(constraints).then(function (stream) {
+//         video.srcObject = stream;
+//         video.addEventListener("loadeddata", predictWebcam);
+//     });
+// }
 
-async function predictWebcam() {
-    let nowInMs = Date.now();
-    if (video.currentTime !== lastVideoTime) {
-        lastVideoTime = video.currentTime;
-        resultsDetect = gestureRecognizer.recognizeForVideo(video, nowInMs);
-    }
-    // canvasCtx.save();
-    // canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-    // const drawingUtils = new DrawingUtils(canvasCtx);
-    // canvasElement.style.height = videoHeight;
-    // canvasElement.style.width = videoWidth;
-    // video.style.width = videoWidth;
-    // video.style.height = videoHeight;
-    // if (results.landmarks) {
-    //   for (const landmarks of results.landmarks) {
-    //     drawingUtils.drawConnectors(
-    //       landmarks,
-    //       GestureRecognizer.HAND_CONNECTIONS,
-    //       {
-    //         color: "#00FF00",
-    //         lineWidth: 5
-    //       }
-    //     );
-    //     drawingUtils.drawLandmarks(landmarks, {
-    //       color: "#FF0000",
-    //       lineWidth: 2
-    //     });
-    //   }
-    // }
-    // canvasCtx.restore();
-    if (resultsDetect.gestures.length > 0) {
-        // gestureOutput.style.display = "block";
-        // gestureOutput.style.width = videoWidth;
-        const categoryName = resultsDetect.gestures[0][0].categoryName;
-        const categoryScore = parseFloat(
-            resultsDetect.gestures[0][0].score * 100
-        ).toFixed(2);
-        const handedness = resultsDetect.handednesses[0][0].displayName;
-        displayMessage(`GestureRecognizer: ${categoryName}\n Confidence: ${categoryScore} %\n Handedness: ${handedness}`);
-        // gestureOutput.innerText = `GestureRecognizer: ${categoryName}\n Confidence: ${categoryScore} %\n Handedness: ${handedness}`;
-    } else {
-        // gestureOutput.style.display = "none";
-    }
-    window.requestAnimationFrame(predictWebcam);
-}
+// async function predictWebcam() {
+//     let nowInMs = Date.now();
+//     if (video.currentTime !== lastVideoTime) {
+//         lastVideoTime = video.currentTime;
+//         resultsDetect = gestureRecognizer.recognizeForVideo(video, nowInMs);
+//     }
+//     // canvasCtx.save();
+//     // canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+//     // const drawingUtils = new DrawingUtils(canvasCtx);
+//     // canvasElement.style.height = videoHeight;
+//     // canvasElement.style.width = videoWidth;
+//     // video.style.width = videoWidth;
+//     // video.style.height = videoHeight;
+//     // if (results.landmarks) {
+//     //   for (const landmarks of results.landmarks) {
+//     //     drawingUtils.drawConnectors(
+//     //       landmarks,
+//     //       GestureRecognizer.HAND_CONNECTIONS,
+//     //       {
+//     //         color: "#00FF00",
+//     //         lineWidth: 5
+//     //       }
+//     //     );
+//     //     drawingUtils.drawLandmarks(landmarks, {
+//     //       color: "#FF0000",
+//     //       lineWidth: 2
+//     //     });
+//     //   }
+//     // }
+//     // canvasCtx.restore();
+//     if (resultsDetect.gestures.length > 0) {
+//         // gestureOutput.style.display = "block";
+//         // gestureOutput.style.width = videoWidth;
+//         const categoryName = resultsDetect.gestures[0][0].categoryName;
+//         const categoryScore = parseFloat(
+//             resultsDetect.gestures[0][0].score * 100
+//         ).toFixed(2);
+//         const handedness = resultsDetect.handednesses[0][0].displayName;
+//         displayMessage(`GestureRecognizer: ${categoryName}\n Confidence: ${categoryScore} %\n Handedness: ${handedness}`);
+//         // gestureOutput.innerText = `GestureRecognizer: ${categoryName}\n Confidence: ${categoryScore} %\n Handedness: ${handedness}`;
+//     } else {
+//         // gestureOutput.style.display = "none";
+//     }
+//     window.requestAnimationFrame(predictWebcam);
+// }
