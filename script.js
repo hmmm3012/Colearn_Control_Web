@@ -107,7 +107,12 @@ function initializeVariables() {
         2: "FCC",
         3: "S",
         4: "FCW",
-        19: "STOP",
+        5: "",
+        6: "",
+        7: "",
+        8: "",
+        9: "",
+        0: "STOP",
     };
     let lastDirection;
     let lastVideoTime = -1;
@@ -482,7 +487,7 @@ function gestureSwitch() {
 }
 
 async function main() {
-    initVar(video)
+    initVar(video,displayMessage)
     // document.addEventListener("DOMContentLoaded", () => {
     pairButton.addEventListener("click", bluetoothPairing);
     sendMediaServerInfoButton.addEventListener("click", sendMediaServerInfo);

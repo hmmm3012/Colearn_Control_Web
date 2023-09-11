@@ -21,7 +21,11 @@ let runningMode = "IMAGE";
 let enableWebcamButton;
 let webcamRunning = false;
 function argMax(array) {
-  return array.map((x, i) => [x, i]).reduce((r, a) => (a[0] > r[0] ? a : r))[1];
+  const indexMax = array.map((x, i) => [x, i]).reduce((r, a) => (a[0] > r[0] ? a : r))[1];
+  if (array[indexMax] > 0.8) {
+    return indexMax;
+  }
+  return 0;
 }
 
 // Before we can use HandLandmarker class we must wait for it to finish
@@ -43,6 +47,7 @@ async function createHandLandmarker() {
   // demosSection.classList.remove("invisible");
 };
 let video
+let display
 // const canvasElement = document.getElementById(
 //   "output_canvas"
 // );
@@ -97,9 +102,9 @@ let results = undefined;
 console.log(video);
 //onnx setup
 const session = new onnx.InferenceSession();
-const outputData = await session.loadModel("./model_9857.onnx");
+const outputData = await session.loadModel("./resnet50.onnx");
 
-let output_digits = 19;
+let output_digits = 0;
 // classes_check = ["peace_inverted", "rock", "three", "three2", "two_up_inverted", "two_up", "call", "dislike", "fist", "four", "like", "mute", "ok", "one", "palm", "peace", "stop", "stop_inverted", "no_gesture"]
 async function predictWebcam() {
   // canvasElement.style.width = video.videoWidth;;
@@ -129,27 +134,35 @@ async function predictWebcam() {
   //         drawLandmarks(canvasCtx, landmarks, { color: "#FF0000", lineWidth: 1 });
   //     }
   // }
+  // const flatArray = [].concat(...results.landmarks);
+  // const arrayOfObjectsWithoutZ = flatArray.map(obj => {
+  //   const { z, ...rest } = obj; // Destructure the object, omitting 'z'
+  //   return rest; // Return the object without 'z'
+  // });
+  // const transformedArray = arrayOfObjectsWithoutZ.map(obj => [obj.x, obj.y]);
+  // const flattenedArray = transformedArray.flat();
   const flatArray = [].concat(...results.landmarks);
-  const arrayOfObjectsWithoutZ = flatArray.map(obj => {
-    const { z, ...rest } = obj; // Destructure the object, omitting 'z'
-    return rest; // Return the object without 'z'
-  });
-  const transformedArray = arrayOfObjectsWithoutZ.map(obj => [obj.x, obj.y]);
-  const flattenedArray = transformedArray.flat();
-  if (flattenedArray.length === 42) {
-    const inferenceInputs = [new Tensor(flattenedArray, 'float32', [1, 42, 1])];
+  // console.log("results" ,results)
+  let flattenedArray = []
+  flatArray.forEach(obj => {
+    flattenedArray.push(obj.x)
+    flattenedArray.push(obj.y)
+  })
+  // console.log('flattened',flattenedArray)
+  if (flattenedArray.length===42) {
+    const inferenceInputs = [new Tensor(flattenedArray, 'float32', [1, 42,1])];
     const output_raw = await session.run(inferenceInputs);
     const outputTensor = output_raw.values().next().value;
     const output_array = Array.from(outputTensor.data);
     output_digits = argMax(output_array);
-    if (output_digits > 5 & output_digits !== 9) {
-      output_digits = 19;
+    if (output_digits > 8) {
+      output_digits = 0;
     }
-    executeFunction(output_digits)
   } else {
-    output_digits = 19;
+    output_digits = 0;
   }
   console.log(output_digits);
+  display(output_digits)
   // canvasCtx.restore();
 
   // Call this function again to keep predicting when the browser is ready.
@@ -158,8 +171,9 @@ async function predictWebcam() {
   }
 }
 
-function initVar(vid) {
+function initVar(vid,displayMessage) {
   video = vid
+  display = displayMessage
   createHandLandmarker()
 }
 
