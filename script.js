@@ -16,27 +16,15 @@ const deviceNamePrefixMap = {
 const UART_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
 const UART_RX_CHARACTERISTIC_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
 const UART_TX_CHARACTERISTIC_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+/* Wifi notifications */
+const Wifi_SS_MSG = "Wifi connected";
+const Wifi_PWD_MSG = "Wifi password is incorrect";
+const Wifi_SSID_MSG = "Cant find SSID";
+const Wifi_PARSING_MSG = "Parsing failed";
+const BLT_SUCCESS_MSG = "Bluetooth connected";
+const BLT_FAIL_MSG = "Bluetooth connection failed";
 
-// /*Prototype*/
 
-// /*Initializing variable */
-// function initializeDOMElements();
-// function initializeVariables();
-// /*Bluetooth func */
-// async function bluetoothPairing();
-// async function connectToBluetoothDevice(deviceNamePrefix);
-// function disconnectFromBluetoothDevice(device);
-// async function sendMessageToDeviceOverBluetooth(message, device);
-// function sendMediaServerInfo();
-// /*Websocket function */
-// async function openWebSocket();
-// function keepWebSocketAlive(webSocket, interval);
-// function stop();
-// /*Entry point*/
-// async function main();
-// /*Webcam function */
-// function hasGetUserMedia();
-// function enableCam(event);
 
 const {
     pairButton,
@@ -46,6 +34,7 @@ const {
     video,
     pairTab,
     gestureTab,
+    loader,
 } = initializeDOMElements();
 let {
     device,
@@ -72,6 +61,7 @@ function initializeDOMElements() {
     const video = document.getElementById("videoElement");
     const pairTab = document.getElementById("pairTab");
     const gestureTab = document.getElementById("gestureTab");
+    const loader = document.getElementById("loader");
     return {
         pairButton,
         sendMediaServerInfoButton,
@@ -80,6 +70,7 @@ function initializeDOMElements() {
         video,
         pairTab,
         gestureTab,
+        loader,
     };
 }
 function initializeVariables() {
@@ -507,7 +498,7 @@ async function predictWebcam() {
                     websocket.send(JSON.stringify(controlCommand));
                     displayMessage(`Send '${direction}' command`);
                     displayDirection(`Send '${direction}' command`);
-                    
+
                 }
             }
         }
