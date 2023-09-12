@@ -103,16 +103,15 @@ function initializeVariables() {
     let gestureRecognizer;
     let runningMode = "VIDEO";
     let controlCommandMap = {
-        1: "N",
+        1: "CCW",
         2: "FCC",
-        3: "S",
-        4: "FCW",
-        5: "",
+        3: "FCW",
+        4: "N",
+        5: "S",
         6: "",
-        7: "",
-        8: "",
-        9: "",
-        0: "STOP",
+        7: "CW",
+        8: "STOP",
+        0: "",
     };
     let lastDirection;
     let lastVideoTime = -1;
@@ -192,18 +191,18 @@ function executeMotion(digits) {
     //     const direction = co
     // }
     const direction = controlCommandMap[digits]
-    // console.log("Direction ",direction)
+    console.log("Direction ",direction)
     if (direction !== lastDirection) {
         lastDirection = direction;
         console.log("Sending")
         const controlCommand = {
             type: "control",
-            direction,
+            direction: direction,
         };
         if (websocket && websocket.readyState === WebSocket.OPEN) {
             websocket.send(JSON.stringify(controlCommand));
-            console.log(`Send '${direction}' command`)
-            displayMessage(`Send '${direction}' command`);
+            console.log(`Send '${JSON.stringify(controlCommand)}' command`)
+            displayMessage(`Send '${JSON.stringify(controlCommand)}' command`);
         }
     }
 }
@@ -235,7 +234,7 @@ async function openWebSocket() {
         videoDecoder.configure(videoDecoderConfig);
         websocket.onmessage = (e) => {
             try {
-                console.log("WS message")
+                // console.log("WS message")
                 if (videoDecoder.state === "configured") {
                     const encodedChunk = new EncodedVideoChunk({
                         type: "key",
@@ -260,7 +259,7 @@ function handleChunk(frame) {
     frame.close();
 }
 function drawVideoFrameOnCanvas(canvas, frame) {
-    console.log("drawing video frame on canvas");
+    // console.log("drawing video frame on canvas");
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;

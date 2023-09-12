@@ -161,10 +161,10 @@ async function predictWebcam() {
   } else {
     output_digits = 0;
   }
-  console.log(output_digits);
-  display(output_digits)
+  // console.log(output_digits);
+  // display(output_digits)
   // canvasCtx.restore();
-
+  executeFunction(output_digits)
   // Call this function again to keep predicting when the browser is ready.
   if (webcamRunning === true) {
     window.requestAnimationFrame(predictWebcam);
