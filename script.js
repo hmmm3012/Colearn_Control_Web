@@ -23,6 +23,15 @@ const UART_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
 const UART_RX_CHARACTERISTIC_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
 const UART_TX_CHARACTERISTIC_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
 
+const PI_READY = "Raspberry pi ready"
+const Wifi_SS_MSG = "Wifi connected";
+const Wifi_PWD_MSG = "Wifi connect failed";
+const Wifi_SSID_MSG = "Wifi connect failed";
+const Wifi_PARSING_MSG = "Parsing failed";
+const BLT_SUCCESS_MSG = "Bluetooth connected";
+const BLT_FAIL_MSG = "Bluetooth connection failed";
+const WS_FAIL_MSG = "Server connect failed"
+const WS_SS_MASG = "Server connected"
 // /*Prototype*/
 
 // /*Initializing variable */
@@ -60,6 +69,7 @@ const {
     video,
     pairTab,
     gestureTab,
+    loader,
 } = initializeDOMElements();
 let {
     device,
@@ -86,6 +96,7 @@ function initializeDOMElements() {
     const video = document.getElementById("videoElement");
     const pairTab = document.getElementById("pairTab");
     const gestureTab = document.getElementById("gestureTab");
+    const loader = document.getElementById("loader");
     return {
         pairButton,
         sendMediaServerInfoButton,
@@ -94,6 +105,7 @@ function initializeDOMElements() {
         video,
         pairTab,
         gestureTab,
+        loader,
     };
 }
 function initializeVariables() {
@@ -103,15 +115,14 @@ function initializeVariables() {
     let gestureRecognizer;
     let runningMode = "VIDEO";
     let controlCommandMap = {
-        1: "CCW",
+        0: "N",
+        1: "FCW",
         2: "FCC",
-        3: "FCW",
-        4: "N",
-        5: "S",
-        6: "",
-        7: "CW",
-        8: "STOP",
-        0: "",
+        3: "CW",
+        4: "CCW",
+        5: "STOP",
+        6: "S",
+        7: "STOP"
     };
     let lastDirection;
     let lastVideoTime = -1;
@@ -138,10 +149,12 @@ function initializeVariables() {
 async function bluetoothPairing() {
     const robotSelect = document.getElementById("robotSelect");
     const robotNameInput = document.getElementById("robotNameInput");
-
+    loadding();
     device = await connectToBluetoothDevice(
         deviceNamePrefixMap[robotSelect.value] ?? undefined
     );
+    loaded();
+    popUp("BLT_SUCCESS");
     robotNameInput.value = device.name;
 }
 
@@ -181,6 +194,7 @@ function sendMediaServerInfo() {
                 profile: robotSelect.value,
             },
         };
+        loadding();
         sendMessageToDeviceOverBluetooth(JSON.stringify(metricData), device);
         onReadMessagefromDeviceOverBluetooth(device)
     }
@@ -191,7 +205,8 @@ function executeMotion(digits) {
     //     const direction = co
     // }
     const direction = controlCommandMap[digits]
-    console.log("Direction ",direction)
+    console.log("Direction ", direction)
+    displayMessage(`Send '${direction}' command`);
     if (direction !== lastDirection) {
         lastDirection = direction;
         console.log("Sending")
@@ -209,7 +224,7 @@ function executeMotion(digits) {
 
 async function openWebSocket() {
     // enableCam();
-
+    sendMessageToDeviceOverBluetooth("RESET$", device)
     enableCam(executeMotion)
     const path = `pang/ws/sub?channel=instant&name=${networkConfig.channel_name}&track=video&mode=bundle`;
     const serverURL = `${window.location.protocol.replace(/:$/, "") === "https" ? "wss" : "ws"
@@ -396,6 +411,7 @@ async function sendMessageToDeviceOverBluetooth(message, device) {
     }
 }
 
+let lastNoti
 
 //read data from bluetooth
 async function onReadMessagefromDeviceOverBluetooth(device) {
@@ -406,9 +422,26 @@ async function onReadMessagefromDeviceOverBluetooth(device) {
         UART_TX_CHARACTERISTIC_UUID
     );
     const Characteristic = await txCharacteristic.startNotifications()
-    Characteristic.addEventListener('characteristicvaluechanged',(e) => {
-        console.log( "Wifi",new TextDecoder("utf-8").decode(e.target.value))
+    Characteristic.addEventListener('characteristicvaluechanged', (e) => {
+        let noti = new TextDecoder("utf-8").decode(e.target.value);
+        console.log("Wifi", new TextDecoder("utf-8").decode(e.target.value))
+        if (noti == lastNoti) return
+        lastNoti = noti
+        if (noti == "PUB_WIFI_SUCCESS") {
+            popUp("Wifi_SS");
+        } else if (noti == "PUB_PARSING_FAILED") {
+            popUp("Wifi_PARSING");
+        } else if (noti == "PUB_WIFI_PWD_FAILED") {
+            popUp("Wifi_PWD");
+        } else if (noti == "PUB_WIFI_SSID_FAILE") {
+            popUp("Wifi_SSID");
+        } else if (noti == "PUB_WS_CONNECTED") {
+            popUp("WS_SUCCESS")
+        } else if (noti == "PUB_WS_FAILED") {
+            popUp("WS_FAIL_MSG")
+        }
     })
+    loaded();
 }
 
 // async function getVideoStream({
@@ -486,7 +519,7 @@ function gestureSwitch() {
 }
 
 async function main() {
-    initVar(video,displayMessage)
+    initVar(video, displayMessage)
     // document.addEventListener("DOMContentLoaded", () => {
     pairButton.addEventListener("click", bluetoothPairing);
     sendMediaServerInfoButton.addEventListener("click", sendMediaServerInfo);
@@ -514,6 +547,72 @@ main();
 function hasGetUserMedia() {
     return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 }
+
+/* */
+function loadding() {
+    loader.style.display = "flex";
+}
+function loaded() {
+    loader.style.display = "none";
+}
+function popUp(noti) {
+    createToast(noti);
+}
+
+const toasts = {
+    PI_READY: {
+        status: "success",
+        msg: PI_READY
+    },
+    Wifi_SS: {
+        status: "success",
+        msg: Wifi_SS_MSG,
+    },
+    Wifi_PWD: {
+        status: "error",
+        msg: Wifi_PWD_MSG,
+    },
+    Wifi_SSID: {
+        status: "error",
+        msg: Wifi_SSID_MSG,
+    },
+    Wifi_PARSING: {
+        status: "error",
+        msg: Wifi_PARSING_MSG,
+    },
+    BLT_SUCCESS: {
+        status: "success",
+        msg: BLT_SUCCESS_MSG
+    },
+    BLT_FAIL: {
+        status: "error",
+        msg: BLT_FAIL_MSG,
+    },
+    WS_SUCCESS: {
+        status: "success",
+        msg: WS_SS_MASG
+    },
+    WS_FAIL_MSG: {
+        status: "error",
+        msg: WS_FAIL_MSG
+    }
+}
+
+function createToast(noti) {
+    console.log(toasts.BLT_SUCCESS.status);
+    let toast = document.createElement('div');
+    toast.className = ` toast ${toasts[noti].status}`;
+    toast.innerHTML = ` <span class="msg">${toasts[noti].msg}</span><span class="countdown"></span>`;
+    document.querySelector('#toasts').appendChild(toast)
+
+    setTimeout(() => {
+        toast.style.animation = 'hide_slide 1s ease forwards'
+    }, 4000)
+    setTimeout(() => {
+        toast.remove()
+    }, 6000)
+}
+
 
 
 
@@ -581,3 +680,5 @@ function hasGetUserMedia() {
 //     }
 //     window.requestAnimationFrame(predictWebcam);
 // }
+
+// popUp("WS_FAIL_MSG")

@@ -22,10 +22,7 @@ let enableWebcamButton;
 let webcamRunning = false;
 function argMax(array) {
   const indexMax = array.map((x, i) => [x, i]).reduce((r, a) => (a[0] > r[0] ? a : r))[1];
-  if (array[indexMax] > 0.8) {
-    return indexMax;
-  }
-  return 0;
+  return indexMax;
 }
 
 // Before we can use HandLandmarker class we must wait for it to finish
@@ -102,9 +99,9 @@ let results = undefined;
 console.log(video);
 //onnx setup
 const session = new onnx.InferenceSession();
-const outputData = await session.loadModel("./resnet50.onnx");
+const outputData = await session.loadModel("./ck_1.onnx");
 
-let output_digits = 0;
+let output_digits = 8;
 // classes_check = ["peace_inverted", "rock", "three", "three2", "two_up_inverted", "two_up", "call", "dislike", "fist", "four", "like", "mute", "ok", "one", "palm", "peace", "stop", "stop_inverted", "no_gesture"]
 async function predictWebcam() {
   // canvasElement.style.width = video.videoWidth;;
@@ -155,11 +152,9 @@ async function predictWebcam() {
     const outputTensor = output_raw.values().next().value;
     const output_array = Array.from(outputTensor.data);
     output_digits = argMax(output_array);
-    if (output_digits > 8) {
-      output_digits = 0;
-    }
+    console.log(output_array[output_digits])
   } else {
-    output_digits = 0;
+    output_digits = 7;
   }
   // console.log(output_digits);
   // display(output_digits)
